@@ -289,15 +289,15 @@ public class T2IParamTypes
     public static T2IRegisteredParam<int> Images, Steps, Width, Height, BatchSize, ExactBackendID, VAETileSize, VAETileOverlap, VAETemporalTileSize, VAETemporalTileOverlap, ClipStopAtLayer, VideoFrames, VideoMotionBucket, VideoFPS, VideoSteps, RefinerSteps, CascadeLatentCompression, MaskShrinkGrow, MaskBlur, MaskGrow, SegmentMaskBlur, SegmentMaskGrow, SegmentMaskOversize, Text2VideoFrames, Text2VideoFPS;
     public static T2IRegisteredParam<long> Seed, VariationSeed, WildcardSeed;
     public static T2IRegisteredParam<double> CFGScale, VariationSeedStrength, InitImageCreativity, InitImageResetToNorm, InitImageNoise, RefinerControl, RefinerUpscale, RefinerCFGScale, ReVisionStrength, AltResolutionHeightMult,
-        FreeUBlock1, FreeUBlock2, FreeUSkip1, FreeUSkip2, GlobalRegionFactor, EndStepsEarly, SamplerSigmaMin, SamplerSigmaMax, SamplerRho, VideoAugmentationLevel, VideoCFG, VideoMinCFG, IP2PCFG2, RegionalObjectCleanupFactor, SigmaShift, SegmentThresholdMax, FluxGuidanceScale;
-    public static T2IRegisteredParam<Image> InitImage, MaskImage;
-    public static T2IRegisteredParam<T2IModel> Model, RefinerModel, VAE, ReVisionModel, RegionalObjectInpaintingModel, SegmentModel, VideoModel, RefinerVAE, ClipLModel, ClipGModel, T5XXLModel, LLaVAModel;
+        FreeUBlock1, FreeUBlock2, FreeUSkip1, FreeUSkip2, GlobalRegionFactor, EndStepsEarly, SamplerSigmaMin, SamplerSigmaMax, SamplerRho, VideoAugmentationLevel, VideoCFG, VideoMinCFG, IP2PCFG2, RegionalObjectCleanupFactor, SigmaShift, SegmentThresholdMax, FluxGuidanceScale, PulidStrength, PulidStart, PulidEnd;
+    public static T2IRegisteredParam<Image> InitImage, MaskImage, PulidImage;
+    public static T2IRegisteredParam<T2IModel> Model, RefinerModel, VAE, ReVisionModel, RegionalObjectInpaintingModel, SegmentModel, VideoModel, RefinerVAE, ClipLModel, ClipGModel, T5XXLModel, LLaVAModel, PulidModel;
     public static T2IRegisteredParam<List<string>> Loras, LoraWeights, LoraTencWeights, LoraSectionConfinement;
     public static T2IRegisteredParam<List<Image>> PromptImages;
     public static T2IRegisteredParam<bool> SaveIntermediateImages, DoNotSave, ControlNetPreviewOnly, RevisionZeroPrompt, RemoveBackground, NoSeedIncrement, NoPreviews, VideoBoomerang, ModelSpecificEnhancements, UseInpaintingEncode, MaskCompositeUnthresholded, SaveSegmentMask, InitImageRecompositeMask, UseReferenceOnly, RefinerDoTiling, AutomaticVAE, ZeroNegative, Text2VideoBoomerang;
 
     public static T2IParamGroup GroupImagePrompting, GroupCore, GroupVariation, GroupResolution, GroupSampling, GroupInitImage, GroupRefiners,
-        GroupAdvancedModelAddons, GroupSwarmInternal, GroupFreeU, GroupRegionalPrompting, GroupAdvancedSampling, GroupVideo, GroupText2Video;
+        GroupAdvancedModelAddons, GroupSwarmInternal, GroupFreeU, GroupRegionalPrompting, GroupAdvancedSampling, GroupVideo, GroupText2Video, GroupPulid;
 
     public class ControlNetParamHolder
     {
@@ -699,6 +699,23 @@ public class T2IParamTypes
         EndStepsEarly = Register<double>(new("End Steps Early", "Percentage of steps to cut off before the image is done generation.",
             "0", Toggleable: true, IgnoreIf: "0", VisibleNormally: false, Min: 0, Max: 1, FeatureFlag: "endstepsearly"
             ));
+        GroupPulid = new("PuLID", Open: false, OrderPriority: 6, IsAdvanced: true);
+        PulidImage = Register<Image>(new("PuLID Image Input", "The image to use as the input to Pulid.\nSelection between multiple face is not yet supported.",
+            null, Toggleable: true, FeatureFlag: "pulid", Group: GroupPulid, OrderPriority: 1, ChangeWeight: 2
+            ));
+        PulidModel = Register<T2IModel>(new("PuLID Model", "The Pulid model to use.",
+            "(None)", FeatureFlag: "pulid", Group: GroupPulid, Subtype: "PuLID", OrderPriority: 2, ChangeWeight: 5
+            ));
+        PulidStrength = Register<double>(new("PuLID Strength", "Higher values make Pulid apply more strongly. Weaker values let the prompt overrule Pulid.",
+            "1", FeatureFlag: "controlnet", Permission: Permissions.ParamControlNet, Min: 0, Max: 2, Step: 0.05, OrderPriority: 3, ViewType: ParamViewType.SLIDER, Group: GroupPulid, Examples: ["0", "0.5", "1", "2"]
+            ));
+        PulidStart = Register<double>(new("PuLID Start", "When to start applying PuLID, as a fraction of steps.\nFor example, 0.5 starts applying halfway through. Must be less than End.\nExcluding early steps reduces PuLID's impact on overall image structure.",
+            "0", IgnoreIf: "0", FeatureFlag: "pulid", Min: 0, Max: 1, Step: 0.05, OrderPriority: 4, IsAdvanced: true, ViewType: ParamViewType.SLIDER, Group: GroupPulid, Examples: ["0", "0.2", "0.5"]
+            ));
+        PulidEnd = Register<double>(new("PuLID End", "When to stop applying PuLID, as a fraction of steps.\nFor example, 0.5 stops applying halfway through. Must be greater than Start.\nExcluding later steps reduces PuLID's impact on finer details.",
+            "1", IgnoreIf: "1", FeatureFlag: "pulid", Min: 0, Max: 1, Step: 0.05, OrderPriority: 5, IsAdvanced: true, ViewType: ParamViewType.SLIDER, Group: GroupPulid, Examples: ["1", "0.8", "0.5"]
+            ));
+        
         GroupAdvancedSampling = new("Advanced Sampling", Open: false, OrderPriority: 10, IsAdvanced: true);
         SamplerSigmaMin = Register<double>(new("Sampler Sigma Min", "Minimum sigma value for the sampler.\nOnly applies to Karras/Exponential schedulers.",
             "0", Min: 0, Max: 1000, Step: 0.01, Toggleable: true, IsAdvanced: true, Group: GroupAdvancedSampling, OrderPriority: -23

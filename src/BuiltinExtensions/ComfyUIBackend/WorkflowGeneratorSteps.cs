@@ -253,6 +253,49 @@ public class WorkflowGeneratorSteps
                 g.LoadingModel = [torchCompile, 0];
             }
         }, -3);
+        AddModelGenStep(g =>
+        {
+            if (g.UserInput.TryGet(T2IParamTypes.PulidImage, out Image pulidImage))
+            {
+                if (!g.UserInput.TryGet(T2IParamTypes.PulidModel, out T2IModel pulidModel))
+                {
+                    Logs.Debug($"Ignore Pulid because no PulidModel specified.");
+                }
+                else if (!g.IsFlux()) {
+                    Logs.Debug($"Ignore Pulid because the current model is '{g.CurrentModelClass()?.Name ?? "(none)"}' which does not support Pulid.");
+                }
+                else if (g.UserInput.TryGet(ComfyUIBackendExtension.TeaCacheMode, out string teaCacheMode) && teaCacheMode != "disabled")
+                {
+                    Logs.Debug($"Ignore Pulid because TeaCache is turned on, currently incompatible.");
+                }
+                else {
+                    string pulidImageNode = g.CreateLoadImageNode(pulidImage, "${pulidimage}", false);
+                    string pulidEvaNode = g.CreateNode("PulidFluxEvaClipLoader", new JObject() {});
+                    string pulidInsightFaceNode = g.CreateNode("PulidFluxInsightFaceLoader", new JObject() {
+                        ["provider"] = "CUDA"
+                    });
+                    string pulidModelNode = g.CreateNode("PulidFluxModelLoader", new JObject() {
+                        ["pulid_file"] = pulidModel.ToString(g.ModelFolderFormat),
+                    });
+
+
+                    string applyPulidNode = g.CreateNode("ApplyPulidFlux", new JObject()
+                    {
+                        ["model"] = g.LoadingModel,
+                        ["pulid_flux"] = new JArray() { pulidModelNode, 0},
+                        ["eva_clip"] = new JArray() { pulidEvaNode, 0 },
+                        ["face_analysis"] = new JArray() { pulidInsightFaceNode, 0 },
+                        ["image"] = new JArray() { pulidImageNode, 0 },
+                        ["weight"] = g.UserInput.Get(T2IParamTypes.PulidStrength, 1.0),
+                        ["start_at"] = g.UserInput.Get(T2IParamTypes.PulidStart, 0.0),
+                        ["end_at"] = g.UserInput.Get(T2IParamTypes.PulidEnd, 1.0),
+                    });
+                    g.LoadingModel = [applyPulidNode, 0];
+                }
+                
+            }
+            
+        }, -2);
         #endregion
         #region Base Image
         AddStep(g =>

@@ -407,7 +407,8 @@ public class ComfyUISelfStartBackend : ComfyUIAPIAbstractBackend
             {
                 await update("ultralytics", $"ultralytics=={UltralyticsVersion}");
             }
-            if (Directory.Exists($"{ComfyUIBackendExtension.Folder}/DLNodes/ComfyUI_IPAdapter_plus"))
+            if (Directory.Exists($"{ComfyUIBackendExtension.Folder}/DLNodes/ComfyUI_IPAdapter_plus")
+                || Directory.Exists($"{ComfyUIBackendExtension.Folder}/DLNodes/ComfyUI_PuLID_Flux_ll"))
             {
                 // FaceID IPAdapter models need these, really inconvenient to make dependencies conditional, so...
                 await install("Cython", "cython");
@@ -428,6 +429,11 @@ public class ComfyUISelfStartBackend : ComfyUIAPIAbstractBackend
                 {
                     await install("insightface", "insightface");
                 }
+            }
+            if (Directory.Exists($"{ComfyUIBackendExtension.Folder}/DLNodes/ComfyUI_PuLID_Flux_ll")) {
+                await install("facexlib", "facexlib");
+                await install("timm", "timm");
+
             }
             AddLoadStatus("Done validating required libs.");
         }

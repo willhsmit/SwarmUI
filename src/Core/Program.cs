@@ -404,6 +404,7 @@ public class Program
         T2IModelSets["ControlNet"] = new() { ModelType = "ControlNet", FolderPaths = buildPathList(ServerSettings.Paths.SDControlNetsFolder) };
         T2IModelSets["Clip"] = new() { ModelType = "Clip", FolderPaths = buildPathList(ServerSettings.Paths.SDClipFolder) };
         T2IModelSets["ClipVision"] = new() { ModelType = "ClipVision", FolderPaths = buildPathList(ServerSettings.Paths.SDClipVisionFolder) };
+        T2IModelSets["PuLID"] = new() { ModelType = "PuLID", FolderPaths = buildPathList("Pulid") };
     }
 
     /// <summary>Rebuild <see cref="DataDir"/>.</summary>

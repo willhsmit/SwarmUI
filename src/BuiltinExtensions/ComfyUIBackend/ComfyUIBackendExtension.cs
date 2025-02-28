@@ -63,7 +63,11 @@ public class ComfyUIBackendExtension : Extension
         ["CheckpointLoaderNF4"] = "bnb_nf4",
         ["UnetLoaderGGUF"] = "gguf",
         ["TensorRTLoader"] = "tensorrt",
-        ["TeaCacheForImgGen"] = "teacache"
+        ["TeaCacheForImgGen"] = "teacache",
+        ["ApplyPulidFlux"] = "pulid",
+        ["PulidFluxEvaClipLoader"] = "pulid",
+        ["PulidFluxInsightFaceLoader"] = "pulid",
+        ["PulidFluxModelLoader"] = "pulid"
     };
 
     /// <inheritdoc/>
@@ -115,6 +119,11 @@ public class ComfyUIBackendExtension : Extension
         {
             FeaturesSupported.UnionWith(["teacache"]);
             FeaturesDiscardIfNotFound.UnionWith(["teacache"]);
+        }
+        if (Directory.Exists($"{FilePath}/DLNodes/ComfyUI_PuLID_Flux_ll"))
+        {
+            FeaturesSupported.UnionWith(["pulid"]);
+            FeaturesDiscardIfNotFound.UnionWith(["pulid"]);
         }
         T2IParamTypes.ConcatDropdownValsClean(ref UpscalerModels, InternalListModelsFor("upscale_models", true).Select(u => $"model-{u}///Model: {u}"));
         T2IParamTypes.ConcatDropdownValsClean(ref YoloModels, InternalListModelsFor("yolov8", false));

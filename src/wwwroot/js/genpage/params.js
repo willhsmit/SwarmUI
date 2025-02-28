@@ -629,6 +629,11 @@ function genInputs(delay_final = false) {
         if (revisionGroup && !currentBackendFeatureSet.includes('ipadapter')) {
             revisionGroup.append(createDiv(`revision_install_ipadapter`, null, `<button class="basic-button" onclick="installFeatureById('ipadapter', 'revision_install_ipadapter')">Install IP Adapter</button>`));
         }
+        let pulidGroup = document.getElementById('input_group_content_pulid');
+        if (pulidGroup && !currentBackendFeatureSet.includes('pulid')) {
+            pulidGroup.append(createDiv(`pulid_install_pulid`, null, `<button class="basic-button" onclick="installFeatureById('pulid', 'pulid_install_pulid')">Install PuLID</button>`));
+        }  
+
         let videoGroup = document.getElementById('input_group_content_imagetovideo');
         if (videoGroup && !currentBackendFeatureSet.includes('frameinterps')) {
             videoGroup.append(createDiv(`video_install_frameinterps`, 'keep_group_visible', `<button class="basic-button" onclick="installFeatureById('frame_interpolation', 'video_install_frameinterps')">Install Frame Interpolation</button>`));
@@ -926,6 +931,10 @@ function hideUnsupportableParams() {
     let ipadapterInstallButton = document.getElementById('revision_install_ipadapter');
     if (ipadapterInstallButton && currentBackendFeatureSet.includes('ipadapter')) {
         ipadapterInstallButton.remove();
+    }
+    let pulidInstallButton = document.getElementById('pulid_install_pulid');
+    if (pulidInstallButton && currentBackendFeatureSet.includes('pulid')) {
+        pulidInstallButton.remove();
     }
     let controlnetInstallButton = document.getElementById('controlnet_install_preprocessors');
     if (controlnetInstallButton && currentBackendFeatureSet.includes('controlnetpreprocessors')) {
