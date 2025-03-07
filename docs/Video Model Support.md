@@ -66,8 +66,10 @@
 
 ### Hunyuan Video Basic Install
 
-- Hunyuan Video is supported natively in SwarmUI as a Text-To-Video model.
-- Use the Comfy Org repackaged model <https://huggingface.co/Comfy-Org/HunyuanVideo_repackaged/blob/main/split_files/diffusion_models/hunyuan_video_t2v_720p_bf16.safetensors>
+- Hunyuan Video is supported natively in SwarmUI as a Text-To-Video model, and a separate Image2Video model.
+- Use the Comfy Org repackaged Text2Video model <https://huggingface.co/Comfy-Org/HunyuanVideo_repackaged/blob/main/split_files/diffusion_models/hunyuan_video_t2v_720p_bf16.safetensors>
+    - Or the Image2Video model <https://huggingface.co/Comfy-Org/HunyuanVideo_repackaged/blob/main/split_files/diffusion_models/hunyuan_video_image_to_video_720p_bf16.safetensors>
+    - Or Kijai's fp8/gguf variants <https://huggingface.co/Kijai/HunyuanVideo_comfy/tree/main>
     - Save to the `diffusion_models` folder
 - Or use the gguf models from city96 <https://huggingface.co/city96/HunyuanVideo-gguf/tree/main>
     - `Q6_K` is near identical to full precision and is recommended for 24 gig cards, `Q4_K_M` is recommended if you have low VRAM, results are still very close, other variants shouldn't be used normally
@@ -169,26 +171,44 @@
 
 *(LTX-Video 0.9.1, Text2Video, CFG=7 because 3 was really bad)*
 
+### LTXV Install
+
 - Lightricks LTX Video ("LTXV") is supported natively in SwarmUI as a Text-To-Video and also as an Image-To-Video model.
     - The text2video is not great quality compared to other models, but the image2video functionality is popular.
-- Download <https://huggingface.co/Lightricks/LTX-Video/blob/main/ltx-video-2b-v0.9.safetensors>
+- Download your preferred safetensors version from <https://huggingface.co/Lightricks/LTX-Video/tree/main>
+    - At time of writing, they have 0.9, 0.9.1, and 0.9.5, each new version better than the last
     - save to `Stable-Diffusion` folder
     - The text encoder (T5-XXL) and VAE will be automatically downloaded
         - You can also set these manually if preferred
-- When selected in the Models list, the `Text To Video` parameter group will become visible
-- The model is trained for 24 fps but supports custom fps values, and frame counts dynamic anywhere up to 257. Multiples of 8 plus 1 (9, 17, 25, 33, 41, ...) are required due to the 8x temporal compression in the LTXV VAE. The input parameter will automatically round if you enter an invalid value.
-- Recommended CFG=3, and very very long descriptive prompts.
+- On the `Server` -> `Extensions` tab, you'll want to grab `SkipLayerGuidanceExtension`, so you can use "STG", a quality improvement for LTXV
+
+### LTXV Parameters
+
+- **FPS:** The model is trained for 24 fps but supports custom fps values
+- **Frames:** frame counts dynamic anywhere up to 257. Multiples of 8 plus 1 (9, 17, 25, 33, 41, ...) are required due to the 8x temporal compression in the LTXV VAE. The input parameter will automatically round if you enter an invalid value.
+- **Resolution:** They recommend 768x512, which is a 3:2 resolution. Other aspect ratios are fine, but the recommended resolution does appear to yield better quality.
+- **CFG:** Recommended CFG=3
+- **Prompt:** very very long descriptive prompts.
     - Seriously this model will make a mess with short prompts.
     - Example prompt (from ComfyUI's reference workflow):
         - Prompt: `best quality, 4k, HDR, a tracking shot of a beautiful scene of the sea waves on the beach`
         - Negative Prompt: `low quality, worst quality, deformed, distorted, disfigured, motion smear, motion artifacts, fused fingers, bad anatomy, weird hand, ugly`
-- You can use it as an Image-To-Video model
-    - Select an image model and configure usual generation parameters
+- If you installed the `SkipLayerGuidanceExtension`, Find the `Skip Layer Guidance` parameter group in advanced
+    - Set `[SLG] Scale` to `1`
+    - Leave `Rescaling Scale` and `Layer Target` unchecked, leave the start/end percents default
+
+### LTXV Image To Video
+
+- You can use the regular LTXV model as an Image-To-Video model
     - Select the LTXV model under the `Image To Video` group's `Video Model` parameter
     - Set `Video FPS` to `24` and `Video CFG` to `3`, set `Video Frames` to a higher value eg `97`
     - Pay attention that your prompt is used for both the image, and video stages
         - You may wish to generate the image once, then do the video separately
         - To do that, set the image as an `Init Image`, and set `Creativity` to `0`
+
+### LTXV Performance
+
+- LTXV has the best performance of any video model supported in Swarm. It is wildly fast. This comes at the cost of quality.
 
 ## NVIDIA Cosmos
 
@@ -230,19 +250,22 @@
 
 ### Wan 2.1 Install
 
-- [Wan 2.1](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B), a video model series from Alibaba, has initial support in SwarmUI.
+- [Wan 2.1](https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B), a video model series from Alibaba, is supported in SwarmUI.
     - Supports separate models for Text2Video or Image2Video.
 - Download the comfy-format Wan model from <https://huggingface.co/Comfy-Org/Wan_2.1_ComfyUI_repackaged/tree/main/split_files/diffusion_models>
-    - Or Kijai's FP8 variants <https://huggingface.co/Kijai/WanVideo_comfy/tree/main>
+    - Use the `fp8` models, not `bf16`
     - For Text2Video, pick either 1.3B (small) model, or 14B (large) model
     - For Image2Video, pick either 480p (640x640 res) or 720p (960x960 res) model
         - These are not autodetected separately, 480p is assumed.
         - For 720p variant, you will want to click the `☰` hamburger menu on the model, then `Edit Metadata`, and set the `Resolution` to `960x960`
+        - The 720p model isn't bigger, it just supports higher resolutions. Subjective comments say the higher resolution isn't worth the performance loss.
     - the 1.3B model is very small and can run on almost any modern GPU
     - the 14B versions are 10x larger and require around 10x more VRAM, requires nvidia xx90 tier models to run at decent speed
     - save to `diffusion_models`
 - Or GGUF format for reduced VRAM requirements
     - For T2V 14B <https://huggingface.co/city96/Wan2.1-T2V-14B-gguf/tree/main>
+    - For I2V 480p <https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/tree/main>
+    - For I2V 720p <https://huggingface.co/city96/Wan2.1-I2V-14B-720P-gguf/tree/main>
     - save to `diffusion_models`
     - click the `☰` hamburger menu on the model, then `Edit Metadata`, and set the `Architecture` to whichever is correct for the model (eg `Wan 2.1 Text2Video 14B`)
 - The text encoder is `umt5-xxl` ("UniMax" T5 from Google), not the same T5-XXL used by other models.
@@ -258,11 +281,13 @@
 - **Resolution:** The models are trained for `832x480`, which is a 16:9 equivalent for `640x640`
     - the 14B models can also do `1280x720`, which is a 16:9 equivalent for `960x960`
     - Other resolutions seem to work fine. Even the 1.3B, which is not trained for 960, can technically still do 960 just with a quality drop as it gets too large.
+        - As a vid2vid gen, the model seem to be very good at generating very high res directly.
 - **Frame Count (Length):** you can select pretty freely, different values work fine. If unspecified, will default to `81` (5 seconds).
     - Use 17 for one second, 33 for two, 49 for three, 65 for 4, 81 for 5.
     - Higher frame counts above 81 seem to become distorted - still work but quality degrades and glitching appears.
-    - 14B may heavily favor 81 frames (5 seconds) and behave unusually at shorter lengths
+    - The Text2Video models seem to favor 81 frames (5 seconds) and exhibit some signs of quality degradation at very low values, the Image2Video models are much more malleable
 - **Steps:** Standard, eg Steps=20, is fine. Changing this value works broadly as expected with other models.
+    - Slightly higher (25 or 30) is probably better for small detail quality
 - **CFG Scale:** Standard CFG ranges are fine. Official recommended CFG is `6`, but you can play with it.
     - Image2Video models may work better at lower CFGs, eg `4`. High CFGs will produce aggressive shifts in lighting.
 - **Sampler and Scheduler:** Standard, eg Euler + Simple
@@ -271,3 +296,6 @@
 - **Performance:** To be filled in once optimizations are complete.
     - If you see generations completing but then freezing or dying at the end, the advanced `VAE Tiling` parameters may help fix that.
     - The Image2Video models are much more performance-intensive than the Text2Video models
+    - To run faster, use a "HighRes Fix" style setup, there's a guide to that here: https://www.reddit.com/r/StableDiffusion/comments/1j0znur/run_wan_faster_highres_fix_in_2025/
+- **Quality:**
+    - The Wan models sometimes produce glitched content on the first or last few frames - under Advanced->`Other Fixes`->you can adjust `Trim Video Start Frames` (and `End`) to a small number (1 to 4) to cut the first/last few frames to dodge this.
