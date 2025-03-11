@@ -36,5 +36,7 @@ public static class InstallableFeatures
         RegisterInstallableFeature(new("ExtraModels", "extramodels", "https://github.com/city96/ComfyUI_ExtraModels", "city96", "This will install ExtraModels support developed by city96.\nDo you wish to install?"));
         RegisterInstallableFeature(new("TeaCache", "teacache", "https://github.com/welltop-cn/ComfyUI-TeaCache", "welltop-cn"));
         RegisterInstallableFeature(new("Stability API", "sai_api", "https://github.com/Stability-AI/ComfyUI-SAI_API", "Stability AI", AutoInstall: true));
+        RegisterInstallableFeature(new("Fluxtapoz", "fluxtapoz", "https://github.com/logtd/ComfyUI-Fluxtapoz", "logtd"));
+
     }
 }

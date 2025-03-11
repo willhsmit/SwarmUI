@@ -122,6 +122,11 @@ public class ComfyUIBackendExtension : Extension
             FeaturesSupported.UnionWith(["teacache"]);
             FeaturesDiscardIfNotFound.UnionWith(["teacache"]);
         }
+        if (Directory.Exists($"{FilePath}/DLNodes/ComfyUI-Fluxtapoz"))
+        {
+            FeaturesSupported.UnionWith(["fluxtapoz"]);
+            FeaturesDiscardIfNotFound.UnionWith(["fluxtapoz"]);
+        }
         T2IParamTypes.ConcatDropdownValsClean(ref UpscalerModels, InternalListModelsFor("upscale_models", true).Select(u => $"model-{u}///Model: {u}"));
         T2IParamTypes.ConcatDropdownValsClean(ref YoloModels, InternalListModelsFor("yolov8", false));
         T2IParamTypes.ConcatDropdownValsClean(ref GligenModels, InternalListModelsFor("gligen", false));

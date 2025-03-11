@@ -660,6 +660,9 @@ function genInputs(delay_final = false) {
         if (revisionGroup && !currentBackendFeatureSet.includes('ipadapter')) {
             revisionGroup.append(createDiv(`revision_install_ipadapter`, null, `<button class="basic-button" onclick="installFeatureById('ipadapter', 'revision_install_ipadapter')">Install IP Adapter</button>`));
         }
+        if (revisionGroup && !currentBackendFeatureSet.includes('fluxtapoz')) {
+            revisionGroup.append(createDiv(`revision_install_fluxtapoz`, null, `<button class="basic-button" onclick="installFeatureById('fluxtapoz', 'revision_install_fluxtapoz')">Install Fluxtapoz</button>`));
+        }
         let videoGroup = document.getElementById('input_group_content_imagetovideo');
         if (videoGroup && !currentBackendFeatureSet.includes('frameinterps')) {
             videoGroup.append(createDiv(`video_install_frameinterps`, 'keep_group_visible', `<button class="basic-button" onclick="installFeatureById('frame_interpolation', 'video_install_frameinterps')">Install Frame Interpolation</button>`));
@@ -957,6 +960,10 @@ function hideUnsupportableParams() {
     let ipadapterInstallButton = document.getElementById('revision_install_ipadapter');
     if (ipadapterInstallButton && currentBackendFeatureSet.includes('ipadapter')) {
         ipadapterInstallButton.remove();
+    }
+    let fluxtapozInstallButton = document.getElementById('revision_install_fluxtapoz');
+    if (fluxtapozInstallButton && currentBackendFeatureSet.includes('fluxtapoz')) {
+        fluxtapozInstallButton.remove();
     }
     let controlnetInstallButton = document.getElementById('controlnet_install_preprocessors');
     if (controlnetInstallButton && currentBackendFeatureSet.includes('controlnetpreprocessors')) {
