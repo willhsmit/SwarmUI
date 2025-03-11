@@ -601,15 +601,29 @@ public class T2IParamInput
             context.Input.Set(T2IParamTypes.LoraSectionConfinement, confinements);
             return "";
         };
-        PromptTagPostProcessors["segment"] = (data, context) =>
+        PromptTagPostProcessors["refiner"] = (data, context) =>
         {
+            context.SectionID = 1;
+            return "<refiner//cid=1>";
+        };
+        PromptTagLengthEstimators["refiner"] = (data, context) =>
+        {
+            return "<refiner>";
+        };
+        string autoConfine(string data, PromptTagContext context)
+        {
+            if (context.SectionID < 10)
+            {
+                context.SectionID = 10;
+            }
             context.SectionID++;
             string raw = context.RawCurrentTag.Before("//cid=");
             return $"<{raw}//cid={context.SectionID}>";
-        };
-        PromptTagPostProcessors["object"] = PromptTagPostProcessors["segment"];
-        PromptTagPostProcessors["region"] = PromptTagPostProcessors["segment"];
-        PromptTagPostProcessors["extend"] = PromptTagPostProcessors["segment"];
+        }
+        PromptTagPostProcessors["segment"] = autoConfine;
+        PromptTagPostProcessors["object"] = autoConfine;
+        PromptTagPostProcessors["region"] = autoConfine;
+        PromptTagPostProcessors["extend"] = autoConfine;
         PromptTagBasicProcessors["break"] = (data, context) =>
         {
             return "<break>";
@@ -981,8 +995,10 @@ public class T2IParamInput
     /// <summary>Special utility to process prompt inputs before the request is executed (to parse wildcards, embeddings, etc).</summary>
     public void PreparsePromptLikes()
     {
-        ValuesInput["prompt"] = ProcessPromptLike(T2IParamTypes.Prompt);
-        ValuesInput["negativeprompt"] = ProcessPromptLike(T2IParamTypes.NegativePrompt);
+        PromptTagContext posContext = new() { Input = this, Param = T2IParamTypes.Prompt.Type.ID };
+        ValuesInput["prompt"] = ProcessPromptLike(T2IParamTypes.Prompt, posContext);
+        PromptTagContext negContext = new() { Input = this, Param = T2IParamTypes.Prompt.Type.ID, Variables = posContext.Variables };
+        ValuesInput["negativeprompt"] = ProcessPromptLike(T2IParamTypes.NegativePrompt, negContext);
     }
 
     /// <summary>Formats embeddings in a prompt string and returns the cleaned string.</summary>
@@ -1047,7 +1063,7 @@ public class T2IParamInput
     }
 
     /// <summary>Special utility to process prompt inputs before the request is executed (to parse wildcards, embeddings, etc).</summary>
-    public string ProcessPromptLike(T2IRegisteredParam<string> param)
+    public string ProcessPromptLike(T2IRegisteredParam<string> param, PromptTagContext context = null)
     {
         string val = Get(param);
         if (val is null)
@@ -1055,7 +1071,7 @@ public class T2IParamInput
             return "";
         }
         string fixedVal = val.Replace('\0', '\a').Replace("\a", "");
-        PromptTagContext context = new() { Input = this, Param = param.Type.ID };
+        context ??= new() { Input = this, Param = param.Type.ID };
         fixedVal = ProcessPromptLike(fixedVal, context, true);
         if (fixedVal != val && !ExtraMeta.ContainsKey($"original_{param.Type.ID}"))
         {
@@ -1072,7 +1088,7 @@ public class T2IParamInput
             return null;
         }
         string addBefore = "", addAfter = "";
-        void processSet(Dictionary<string, Func<string, PromptTagContext, string>> set, bool requireData)
+        void processSet(Dictionary<string, Func<string, PromptTagContext, string>> set)
         {
             val = StringConversionHelper.QuickSimpleTagFiller(val, "<", ">", tag =>
             {
@@ -1085,10 +1101,15 @@ public class T2IParamInput
                 prefix = prefix.ToLowerFast();
                 context.RawCurrentTag = tag;
                 context.PreData = preData;
-                Logs.Verbose($"[Prompt Parsing] Found tag {val}, will fill... prefix = '{prefix}', data = '{data}', predata = '{preData}'");
-                if ((!string.IsNullOrWhiteSpace(data) || !requireData) && set.TryGetValue(prefix, out Func<string, PromptTagContext, string> proc))
+                int sectionId = context.SectionID;
+                Logs.Verbose($"[Prompt Parsing] Found tag {val}, will fill... prefix = '{prefix}', data = '{data}', predata = '{preData}', section = '{sectionId}'");
+                if (set.TryGetValue(prefix, out Func<string, PromptTagContext, string> proc))
                 {
                     string result = proc(data, context);
+                    if (sectionId != context.SectionID)
+                    {
+                        Logs.Verbose($"[Prompt Parsing] Section ID changed from {sectionId} to {context.SectionID}");
+                    }
                     if (result is not null)
                     {
                         if (result.StartsWithNull()) // Special case for preset tag modifying the current value
@@ -1111,9 +1132,9 @@ public class T2IParamInput
                 return $"<{tag}>";
             }, false, 0);
         }
-        processSet(PromptTagBasicProcessors, false);
-        processSet(PromptTagProcessors, true);
-        processSet(PromptTagPostProcessors, true);
+        processSet(PromptTagBasicProcessors);
+        processSet(PromptTagProcessors);
+        processSet(PromptTagPostProcessors);
         if (isMain)
         {
             string triggerPhrase = context.TriggerPhraseExtra;

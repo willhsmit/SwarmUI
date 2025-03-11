@@ -99,7 +99,12 @@ public class WorkflowGeneratorSteps
         }, -14);
         AddModelGenStep(g =>
         {
+            (g.LoadingModel, g.LoadingClip) = g.LoadLorasForConfinement(-1, g.LoadingModel, g.LoadingClip);
             (g.LoadingModel, g.LoadingClip) = g.LoadLorasForConfinement(0, g.LoadingModel, g.LoadingClip);
+            if (g.IsRefinerStage)
+            {
+                (g.LoadingModel, g.LoadingClip) = g.LoadLorasForConfinement(1, g.LoadingModel, g.LoadingClip);
+            }
         }, -10);
         AddModelGenStep(g =>
         {
@@ -217,12 +222,44 @@ public class WorkflowGeneratorSteps
                         g.LoadingModel = [teaCacheNode, 0];
                     }
                 }
-                else if (g.IsHunyuanVideo() || g.IsLTXV())
+                else if (g.IsHunyuanVideo() || g.IsLTXV() || g.IsWanVideo())
                 {
+                    string type = "";
+                    if (g.IsHunyuanVideo())
+                    {
+                        type = "hunyuan_video";
+                    }
+                    else if (g.IsLTXV())
+                    {
+                        type = "ltxv";
+                    }
+                    else
+                    {
+                        string arch = g.CurrentModelClass()?.ID;
+                        if (arch == "wan-2_1-text2video-1_3b")
+                        {
+                            type = "wan2.1_t2v_1.3B";
+                        }
+                        else if (arch == "wan-2_1-text2video-14b")
+                        {
+                            type = "wan2.1_t2v_14B";
+                        }
+                        else if (arch == "wan-2_1-image2video-14b")
+                        {
+                            if (g.FinalLoadedModel.Name.Contains("720p") || g.FinalLoadedModel.StandardWidth == 960)
+                            {
+                                type = "wan2.1_i2v_720p_14B";
+                            }
+                            else
+                            {
+                                type = "wan2.1_i2v_480p_14B";
+                            }
+                        }
+                    }
                     string teaCacheNode = g.CreateNode("TeaCacheForVidGen", new JObject()
                     {
                         ["model"] = g.LoadingModel,
-                        ["model_type"] = g.IsHunyuanVideo() ? "hunyuan_video" : "ltxv",
+                        ["model_type"] = type,
                         ["rel_l1_thresh"] = teaCacheThreshold
                     });
                     g.LoadingModel = [teaCacheNode, 0];
@@ -1084,18 +1121,22 @@ public class WorkflowGeneratorSteps
                 g.IsRefinerStage = true;
                 JArray origVae = g.FinalVae, prompt = g.FinalPrompt, negPrompt = g.FinalNegativePrompt;
                 bool modelMustReencode = false;
-                if (g.UserInput.TryGet(T2IParamTypes.RefinerModel, out T2IModel refineModel) && refineModel is not null)
+                T2IModel baseModel = g.UserInput.Get(T2IParamTypes.Model);
+                T2IModel refineModel = baseModel;
+                string loaderNodeId = null;
+                if (g.UserInput.TryGet(T2IParamTypes.RefinerModel, out T2IModel altRefineModel) && altRefineModel is not null)
                 {
-                    T2IModel baseModel = g.UserInput.Get(T2IParamTypes.Model);
+                    refineModel = altRefineModel;
                     modelMustReencode = refineModel.ModelClass?.CompatClass != "stable-diffusion-xl-v1-refiner" || baseModel.ModelClass?.CompatClass != "stable-diffusion-xl-v1";
-                    g.NoVAEOverride = refineModel.ModelClass?.CompatClass != baseModel.ModelClass?.CompatClass;
-                    g.FinalLoadedModel = refineModel;
-                    g.FinalLoadedModelList = [refineModel];
-                    (g.FinalLoadedModel, g.FinalModel, g.FinalClip, g.FinalVae) = g.CreateStandardModelLoader(refineModel, "Refiner", "20");
-                    prompt = g.CreateConditioning(g.UserInput.Get(T2IParamTypes.Prompt), g.FinalClip, refineModel, true);
-                    negPrompt = g.CreateConditioning(g.UserInput.Get(T2IParamTypes.NegativePrompt), g.FinalClip, refineModel, false);
-                    g.NoVAEOverride = false;
+                    loaderNodeId = "20";
                 }
+                g.NoVAEOverride = refineModel.ModelClass?.CompatClass != baseModel.ModelClass?.CompatClass;
+                g.FinalLoadedModel = refineModel;
+                g.FinalLoadedModelList = [refineModel];
+                (g.FinalLoadedModel, g.FinalModel, g.FinalClip, g.FinalVae) = g.CreateStandardModelLoader(refineModel, "Refiner", loaderNodeId);
+                g.NoVAEOverride = false;
+                prompt = g.CreateConditioning(g.UserInput.Get(T2IParamTypes.Prompt), g.FinalClip, g.FinalLoadedModel, true, isRefiner: true);
+                negPrompt = g.CreateConditioning(g.UserInput.Get(T2IParamTypes.NegativePrompt), g.FinalClip, g.FinalLoadedModel, false, isRefiner: true);
                 bool doSave = g.UserInput.Get(T2IParamTypes.SaveIntermediateImages, false);
                 bool doUspcale = g.UserInput.TryGet(T2IParamTypes.RefinerUpscale, out double refineUpscale) && refineUpscale != 1;
                 // TODO: Better same-VAE check
@@ -1301,7 +1342,10 @@ public class WorkflowGeneratorSteps
                     int oversize = g.UserInput.Get(T2IParamTypes.SegmentMaskOversize, 16);
                     (string boundsNode, string croppedMask, string masked, string scaledImage) = g.CreateImageMaskCrop([segmentNode, 0], g.FinalImageOut, oversize, vae, g.FinalLoadedModel, thresholdMax: g.UserInput.Get(T2IParamTypes.SegmentThresholdMax, 1));
                     g.EnableDifferential();
-                    (model, clip) = g.LoadLorasForConfinement(part.ContextID, g.FinalModel, clip);
+                    if (part.ContextID > 0)
+                    {
+                        (model, clip) = g.LoadLorasForConfinement(part.ContextID, g.FinalModel, clip);
+                    }
                     JArray prompt = g.CreateConditioning(part.Prompt, clip, t2iModel, true);
                     string neg = negativeParts.FirstOrDefault(p => p.DataText == part.DataText)?.Prompt ?? negativeRegion.GlobalPrompt;
                     JArray negPrompt = g.CreateConditioning(neg, clip, t2iModel, false);
@@ -1376,7 +1420,10 @@ public class WorkflowGeneratorSteps
             }
             else
             {
-                if (g.IsVideoModel())
+                bool willHaveFollowupVideo = g.UserInput.TryGet(T2IParamTypes.VideoModel, out _) || g.UserInput.Get(T2IParamTypes.Prompt, "").Contains("<extend:");
+                // Heuristic check for if this is an Init Image with no further processing, ie the initial image save is redundant because we're just wanting to extend a presaved image to a video
+                bool formedFromSingleImage = g.UserInput.Get(T2IParamTypes.InitImageCreativity, -1) == 0 && !g.UserInput.Get(T2IParamTypes.SaveIntermediateImages, false) && !g.UserInput.TryGet(T2IParamTypes.RefinerMethod, out _);
+                if (g.IsVideoModel() && !formedFromSingleImage && !willHaveFollowupVideo)
                 {
                     if (g.UserInput.TryGet(T2IParamTypes.TrimVideoStartFrames, out _) || g.UserInput.TryGet(T2IParamTypes.TrimVideoEndFrames, out _))
                     {
@@ -1409,11 +1456,10 @@ public class WorkflowGeneratorSteps
                     }
                 }
                 string nodeId = "9";
-                if (g.UserInput.TryGet(T2IParamTypes.VideoModel, out _) || g.UserInput.Get(T2IParamTypes.Prompt, "").Contains("<extend:"))
+                if (willHaveFollowupVideo)
                 {
                     nodeId = "30";
-                    // Heuristic check for if this is an Init Image with no further processing, ie the initial image save is redundant because we're just wanting to extend a presaved image to a video
-                    if (g.UserInput.Get(T2IParamTypes.InitImageCreativity, -1) == 0 && !g.UserInput.Get(T2IParamTypes.SaveIntermediateImages, false) && !g.UserInput.TryGet(T2IParamTypes.RefinerMethod, out _))
+                    if (formedFromSingleImage)
                     {
                         nodeId = null;
                     }
@@ -1649,7 +1695,6 @@ public class WorkflowGeneratorSteps
                 JObject actualNode = g.Workflow[sourceNode] as JObject;
                 if ($"{actualNode["class_type"]}" == "VAEEncode")
                 {
-                    // (VAE is almost definitely the same but check to be safe)
                     JArray myVae = data["inputs"]["vae"] as JArray;
                     JArray srcVae = actualNode["inputs"]["vae"] as JArray;
                     if ($"{myVae[0]}" == $"{srcVae[0]}" && $"{myVae[1]}" == $"{srcVae[1]}")
@@ -1664,6 +1709,8 @@ public class WorkflowGeneratorSteps
             g.RunOnNodesOfClass("VAEDecodeTiled", fixDecode);
             g.RemoveClassIfUnused("VAEEncode");
             g.RemoveClassIfUnused("CLIPTextEncode");
+            g.RemoveClassIfUnused("CLIPTextEncodeSDXL");
+            g.RemoveClassIfUnused("SwarmClipTextEncodeAdvanced");
         }, 200);
         #endregion
     }
