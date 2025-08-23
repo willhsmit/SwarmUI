@@ -1970,6 +1970,23 @@ public class WorkflowGenerator
         return null;
     }
 
+    /// <summary>Returns a reference to the first prompt image, falling back to init image (after any cropping). Null if none available.</summary>
+    /// <param name="fixTo1024ish">If true, rescale the image to 1024-ish. If false, leave it as-is.</param>
+    public JArray GetFirstPromptImageOrInitImage(bool fixTo1024ish)
+    {
+        JArray firstImg;
+        if ((firstImg = GetFirstPromptImage(true)) is not null) {
+            return firstImg;
+        } else if (MaskShrunkInfo is not null && MaskShrunkInfo.ScaledImage is not null) {
+            return [MaskShrunkInfo.ScaledImage, 0];
+        } else if (FinalInputImage is not null) {
+            // Not sure if we should scale this, MaskShrunkInfo should already be somewhat scaled.
+            return FinalInputImage;
+        }
+        return null;
+    }
+
+
     /// <summary>Creates a VAE Encode node and applies mask..</summary>
     public JArray DoMaskedVAEEncode(JArray vae, JArray image, JArray mask, string id)
     {
@@ -2874,7 +2891,7 @@ public class WorkflowGenerator
                 ["text"] = prompt
             }, id);
         }
-        else if (IsQwenImageEdit() && isPositive && (qwenImage = GetFirstPromptImage(true)) is not null)
+        else if (IsQwenImageEdit() && isPositive && (qwenImage = GetFirstPromptImageOrInitImage(true)) is not null)
         {
             if (wantsSwarmCustom)
             {
