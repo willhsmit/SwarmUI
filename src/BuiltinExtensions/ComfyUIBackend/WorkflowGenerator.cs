@@ -523,7 +523,7 @@ public class WorkflowGenerator
     }
 
     /// <summary>Creates a new node to load an image.</summary>
-    public string CreateLoadImageNode(Image img, string param, bool resize, string nodeId = null)
+    public string CreateLoadImageNode(Image img, string param, bool resize, string nodeId = null, int? width = null, int? height = null)
     {
         if (nodeId is null && NodeHelpers.TryGetValue($"imgloader_{param}_{resize}", out string alreadyLoaded))
         {
@@ -536,7 +536,7 @@ public class WorkflowGenerator
             {
                 result = CreateNode("SwarmLoadImageB64", new JObject()
                 {
-                    ["image_base64"] = (resize ? img.Resize(UserInput.GetImageWidth(), UserInput.GetImageHeight()) : img).AsBase64
+                    ["image_base64"] = (resize ? img.Resize(width ?? UserInput.GetImageWidth(), height ?? UserInput.GetImageHeight()) : img).AsBase64
                 }, nodeId);
             }
             else
@@ -1001,18 +1001,33 @@ public class WorkflowGenerator
                 {
                     throw new SwarmUserErrorException($"Model '{model.Name}' is in Nunchaku format, but the server does not have Nunchaku support installed. Cannot run.");
                 }
-                // TODO: Configuration of these params?
-                string modelNode = CreateNode("NunchakuFluxDiTLoader", new JObject()
+                if (IsFlux())
                 {
-                    ["model_path"] = model.Name.EndsWith("/transformer_blocks.safetensors") ? model.Name.BeforeLast('/').Replace("/", ModelFolderFormat ?? $"{Path.DirectorySeparatorChar}") : model.ToString(ModelFolderFormat),
-                    ["cache_threshold"] = UserInput.Get(ComfyUIBackendExtension.NunchakuCacheThreshold, 0),
-                    ["attention"] = "nunchaku-fp16",
-                    ["cpu_offload"] = "auto",
-                    ["device_id"] = 0,
-                    ["data_type"] = model.Metadata?.SpecialFormat == "nunchaku-fp4" ? "bfloat16" : "float16",
-                    ["i2f_mode"] = "enabled"
-                }, id);
-                LoadingModel = [modelNode, 0];
+                    // TODO: Configuration of these params?
+                    string modelNode = CreateNode("NunchakuFluxDiTLoader", new JObject()
+                    {
+                        ["model_path"] = model.Name.EndsWith("/transformer_blocks.safetensors") ? model.Name.BeforeLast('/').Replace("/", ModelFolderFormat ?? $"{Path.DirectorySeparatorChar}") : model.ToString(ModelFolderFormat),
+                        ["cache_threshold"] = UserInput.Get(ComfyUIBackendExtension.NunchakuCacheThreshold, 0),
+                        ["attention"] = "nunchaku-fp16",
+                        ["cpu_offload"] = "auto",
+                        ["device_id"] = 0,
+                        ["data_type"] = model.Metadata?.SpecialFormat == "nunchaku-fp4" ? "bfloat16" : "float16",
+                        ["i2f_mode"] = "enabled"
+                    }, id);
+                    LoadingModel = [modelNode, 0];
+                }
+                else if (IsQwenImage())
+                {
+                    string modelNode = CreateNode("NunchakuQwenImageDiTLoader", new JObject()
+                    {
+                        ["model_name"] = model.Name.EndsWith("/transformer_blocks.safetensors") ? model.Name.BeforeLast('/').Replace("/", ModelFolderFormat ?? $"{Path.DirectorySeparatorChar}") : model.ToString(ModelFolderFormat)
+                    }, id);
+                    LoadingModel = [modelNode, 0];
+                }
+                else
+                {
+                    throw new SwarmUserErrorException($"Cannot load nunchaku for model architecture '{model.ModelClass?.ID}'. If other model architectures are supported in the Nunchaku source, please report this on the SwarmUI GitHub or Discord.");
+                }
             }
             else if (model.Metadata?.SpecialFormat == "bnb_nf4" || model.Metadata?.SpecialFormat == "bnb_fp4")
             {
@@ -1952,9 +1967,32 @@ public class WorkflowGenerator
             string img1 = CreateLoadImageNode(images[0], "${promptimages.0}", false);
             JArray img = [img1, 0];
             (int width, int height) = images[0].GetResolution();
-            if (fixTo1024ish && (width * height < 960 * 960 || width * height > 2048 * 2048)) // Kontext wonks out below 1024x1024 so add a scale fix check, with a bit of margin for close-enough
+            int genWidth = UserInput.GetImageWidth(), genHeight = UserInput.GetImageHeight();
+            int actual = (int)Math.Sqrt(width * height), target = (int)Math.Sqrt(genWidth * genHeight);
+            bool doesFit = true;
+            if (IsKontext()) // Kontext needs <= target gen size, and is sufficient once input hits 1024.
             {
-                (width, height) = Utilities.ResToModelFit(width, height, 1024 * 1024);
+                if (target < 1024)
+                {
+                    doesFit = Math.Abs(actual - target) <= 32;
+                }
+                else if (target >= 1024)
+                {
+                    if (actual < 1024)
+                    {
+                        target = 1024;
+                        doesFit = false;
+                    } // else does fit
+                }
+            }
+            else if (IsQwenImage())
+            {
+                target = 1024; // Qwen image targets 1328 for gen but wants 1024 inputs.
+                doesFit = Math.Abs(actual - target) <= 64;
+            }
+            if (fixTo1024ish && !doesFit)
+            {
+                (width, height) = Utilities.ResToModelFit(width, height, target * target);
                 string scaleFix = CreateNode("ImageScale", new JObject()
                 {
                     ["image"] = img,
@@ -2413,8 +2451,17 @@ public class WorkflowGenerator
                 }
                 if (g.UserInput.TryGet(T2IParamTypes.VideoEndFrame, out Image videoEndFrame))
                 {
-                    string endFrame = g.CreateLoadImageNode(videoEndFrame, "${videoendframe}", true);
+                    string endFrame = g.CreateLoadImageNode(videoEndFrame, "${videoendframe}", false);
                     JArray endFrameNode = [endFrame, 0];
+                    string scaled = g.CreateNode("ImageScale", new JObject()
+                    {
+                        ["image"] = endFrameNode,
+                        ["width"] = Width,
+                        ["height"] = Height,
+                        ["upscale_method"] = "lanczos",
+                        ["crop"] = "disabled"
+                    });
+                    endFrameNode = [scaled, 0];
                     string img2vidNode = g.CreateNode("WanFirstLastFrameToVideo", new JObject()
                     {
                         ["width"] = Width,
@@ -2495,8 +2542,17 @@ public class WorkflowGenerator
                 });
                 if (g.UserInput.TryGet(T2IParamTypes.VideoEndFrame, out Image videoEndFrame))
                 {
-                    string endFrame = g.CreateLoadImageNode(videoEndFrame, "${videoendframe}", true);
+                    string endFrame = g.CreateLoadImageNode(videoEndFrame, "${videoendframe}", false);
                     JArray endFrameNode = [endFrame, 0];
+                    string scaled = g.CreateNode("ImageScale", new JObject()
+                    {
+                        ["image"] = endFrameNode,
+                        ["width"] = Width,
+                        ["height"] = Height,
+                        ["upscale_method"] = "lanczos",
+                        ["crop"] = "disabled"
+                    });
+                    endFrameNode = [scaled, 0];
                     string encodedEnd = g.CreateNode("CLIPVisionEncode", new JObject()
                     {
                         ["clip_vision"] = clipLoaderNode,
@@ -2681,7 +2737,7 @@ public class WorkflowGenerator
         bool returnLeftoverNoise = false;
         if (genInfo.VideoSwapModel is not null)
         {
-            endStep = (int)Math.Round(genInfo.Steps * genInfo.VideoSwapPercent);
+            endStep = (int)Math.Round(genInfo.Steps * (1 - genInfo.VideoSwapPercent));
             returnLeftoverNoise = true;
         }
         string explicitSampler = UserInput.Get(ComfyUIBackendExtension.SamplerParam, null, sectionId: genInfo.ContextID, includeBase: false);
@@ -2703,7 +2759,7 @@ public class WorkflowGenerator
                 explicitScheduler = UserInput.Get(ComfyUIBackendExtension.SchedulerParam, null, sectionId: T2IParamInput.SectionID_VideoSwap, includeBase: false) ?? explicitScheduler;
                 cfg = UserInput.GetNullable(T2IParamTypes.CFGScale, T2IParamInput.SectionID_VideoSwap, false) ?? cfg;
                 steps = UserInput.GetNullable(T2IParamTypes.Steps, T2IParamInput.SectionID_VideoSwap, false) ?? steps;
-                endStep = (int)Math.Round(steps * genInfo.VideoSwapPercent);
+                endStep = (int)Math.Round(steps * (1 - genInfo.VideoSwapPercent));
             }
             // TODO: Should class-changes be allowed (must re-emit all the model-specific cond logic, maybe a vae reencoder - this is basically a refiner run)
             samplered = CreateKSampler(swapVideoModel, genInfo.PosCond, genInfo.NegCond, FinalLatentImage, cfg, steps, endStep, 10000, genInfo.Seed + 1, false, false, sigmin: 0.002, sigmax: 1000, previews: previewType, defsampler: genInfo.DefaultSampler, defscheduler: genInfo.DefaultScheduler, hadSpecialCond: genInfo.HadSpecialCond, explicitSampler: explicitSampler, explicitScheduler: explicitScheduler);

@@ -291,8 +291,7 @@ Parameters and usage is the same as any other normal model.
         - Click the `☰` hamburger menu on the model, then `Edit Metadata`, then select the `Architecture` as `Flux.1 Kontext Dev`, then hit save
     - Paste images into the prompt box to serve as the reference images it will use to generate.
         - If you have an init image and no reference images, the init image will be used.
-        - Be aware that the first image used will be the resolution control of the input. You will want to keep the image between 1024 and 2048 pixels wide.
-            - (If the image is significantly out of scale range, eg 512x512, it will be automatically rescaled for you)
+        - Swarm will automatically keep the size of the image correct for Kontext input, but make sure your aspect ratio is matched.
     - Kontext can take as many images as you want, but the way this works on the inside is a bit hacky and limited quality.
     - Prompt should describe a *change* to make to the image.
     - BFL published an official prompting guide here, following it carefully is recommended: <https://docs.bfl.ai/guides/prompting_guide_kontext_i2i>
@@ -424,7 +423,8 @@ Parameters and usage is the same as any other normal model.
 - [Qwen Image](https://huggingface.co/Qwen/Qwen-Image) is natively supported in SwarmUI.
     - Download the model here <https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/tree/main/split_files/diffusion_models>
         - There's an fp8 and a bf16 variant available. The fp8 model is highly recommended.
-        - Or, for limited memory space, GGUF versions <https://huggingface.co/city96/Qwen-Image-gguf/tree/main>
+        - Or, for nunchaku accelerated version that uses a bit less VRAM and runs faster, <https://huggingface.co/nunchaku-tech/nunchaku-qwen-image/tree/main>
+        - Or, other option for limited memory space, GGUF versions <https://huggingface.co/city96/Qwen-Image-gguf/tree/main>
         - Or a distilled version here <https://huggingface.co/Comfy-Org/Qwen-Image_ComfyUI/blob/main/non_official/diffusion_models/qwen_image_distill_full_fp8_e4m3fn.safetensors>
             - This uses CFG=1, Steps=15 or so.
             - There's also a couple "Lightning" loras <https://huggingface.co/lightx2v/Qwen-Image-Lightning/tree/main> for the base model, CFG=1 Steps=8 or 4
@@ -442,7 +442,14 @@ Parameters and usage is the same as any other normal model.
 
 ### Controlnets
 
-- There are two controlnet versions available for Qwen Image currently
+- There are three controlnet versions available for Qwen Image currently
+    - Regular form
+        - There's a regular controlnet-union available here <https://huggingface.co/InstantX/Qwen-Image-ControlNet-Union/blob/main/diffusion_pytorch_model.safetensors>
+        - works like any other controlnet. Select as controlnet model, give it an image, select a preprocessor. Probably lower the strength a bit.
+        - Compatible with lightning loras.
+        - If not using Lightning, probably raise your CFG a bit to ensure your prompt is stronger than the controlnet.
+    - "Model Patch"
+        - Support pending
     - LoRA form
         - Download here <https://huggingface.co/Comfy-Org/Qwen-Image-DiffSynth-ControlNets/tree/main/split_files/loras>
         - Save to loras folder
@@ -450,8 +457,6 @@ Parameters and usage is the same as any other normal model.
         - Upload a prompt image of controlnet input (depth or canny)
             - You can create this from an existing image by using the Controlnet Parameter group, select the preprocessor (Canny, or MiDAS Depth), and hit "Preview"
         - You cannot use the controlnet parameters directly for actual generation due to the weird lora-hack this uses
-    - "Model Patch"
-        - Support pending
 
 ### Qwen Image Edit
 
@@ -464,7 +469,8 @@ Parameters and usage is the same as any other normal model.
     - **Sigma Shift:** `3` or lower (as low as `0.5`) is a valid range. Some users report that a value below 1 might be ideal.
     - You can insert image(s) to the prompt box to have it edit that image
         - It will focus the first image, but you can get it to pull features from additional images (with limited quality)
-    - It is compatible with qwen image Lightning loras, but the quality will be poor until edit-specific lightning loras are trained
+    - There are a couple dedicated Qwen Image Edit Lightning Loras <https://huggingface.co/lightx2v/Qwen-Image-Lightning/tree/main>
+        - Take care to separate the Edit lora vs the base Qwen Image lora.
 
 # Video Models
 
