@@ -1822,7 +1822,7 @@ public class WorkflowGenerator
             }
             else if (!onlyExplicit && MaskShrunkInfo is not null && MaskShrunkInfo.ScaledImage is not null)
             {
-                img = GetPromptImage(true);
+                img = [MaskShrunkInfo.ScaledImage, 0];
                 makeRefLatent(img);
             }
             else if (!onlyExplicit && FinalInputImage is not null)
