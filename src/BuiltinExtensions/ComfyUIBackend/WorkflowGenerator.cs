@@ -1822,7 +1822,7 @@ public class WorkflowGenerator
             }
             else if (!onlyExplicit && MaskShrunkInfo is not null && MaskShrunkInfo.ScaledImage is not null)
             {
-                img = [MaskShrunkInfo.ScaledImage, 0];
+                img = GetPromptImage(true);
                 makeRefLatent(img);
             }
             else if (!onlyExplicit && FinalInputImage is not null)
@@ -2110,7 +2110,33 @@ public class WorkflowGenerator
             }
             return img;
         }
+        else if (index == 0 && MaskShrunkInfo is not null && MaskShrunkInfo.ScaledImage is not null)
+        {
+            JArray img = [MaskShrunkInfo.ScaledImage, 0];
+            if (IsQwenImageEditPlus() && promptSize)
+            {
+                img = swarmRescale(img, 384);
+            }
+            else if (IsQwenImage())
+            {
+                img = swarmRescale(img, 1024);
+            }
+            return img;
+        }
         return null;
+    }
+
+    // invoke the swarm rescale node.
+    public JArray swarmRescale(JArray img, int targetBound)
+    {
+        string scaleFix = CreateNode("SwarmImageScaleForMP", new JObject()
+        {
+            ["image"] = img,
+            ["width"] = targetBound,
+            ["height"] = targetBound,
+            ["can_shrink"] = true
+        });
+        return [scaleFix, 0];
     }
 
     /// <summary>Creates a VAE Encode node and applies mask..</summary>
