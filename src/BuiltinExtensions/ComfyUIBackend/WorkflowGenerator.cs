@@ -2062,7 +2062,22 @@ public class WorkflowGenerator
     /// <param name="index">Index of image to grab.</param>
     public JArray GetPromptImage(bool fixSize, bool promptSize = false, int index = 0)
     {
-        if (UserInput.TryGet(T2IParamTypes.PromptImages, out List<Image> images) && images.Count > index)
+        if (index == 0 && MaskShrunkInfo is not null && MaskShrunkInfo.ScaledImage is not null)
+        {
+            // prefer the mask shrunk info even if other images provided.
+            // assume the first image is same?
+            JArray img = [MaskShrunkInfo.ScaledImage, 0];
+            if (IsQwenImageEditPlus() && promptSize)
+            {
+                img = swarmRescale(img, 384);
+            }
+            else if (IsQwenImage())
+            {
+                img = swarmRescale(img, 1024);
+            }
+            return img;
+        }
+        else if (UserInput.TryGet(T2IParamTypes.PromptImages, out List<Image> images) && images.Count > index)
         {
             string img1 = CreateLoadImageNode(images[index], "${promptimages." + index + "}", false);
             JArray img = [img1, 0];
@@ -2109,20 +2124,7 @@ public class WorkflowGenerator
                 img = [scaleFix, 0];
             }
             return img;
-        }
-        else if (index == 0 && MaskShrunkInfo is not null && MaskShrunkInfo.ScaledImage is not null)
-        {
-            JArray img = [MaskShrunkInfo.ScaledImage, 0];
-            if (IsQwenImageEditPlus() && promptSize)
-            {
-                img = swarmRescale(img, 384);
-            }
-            else if (IsQwenImage())
-            {
-                img = swarmRescale(img, 1024);
-            }
-            return img;
-        }
+        } 
         return null;
     }
 
