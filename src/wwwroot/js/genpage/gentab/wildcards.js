@@ -167,7 +167,7 @@ class WildcardHelpers {
         };
         if (curImg && curImg.tagName == 'IMG') {
             setImageFileDirect(this.imageElem, curImg.src, 'cur', 'cur', () => {
-                this.enableImageElem.checked = !card.image || card.image == 'imgs/model_placeholder.jpg';
+                this.enableImageElem.checked = false;
                 run();
             });
         }
@@ -230,6 +230,10 @@ class WildcardHelpers {
                     complete();
                 }, true);
                 return;
+            }
+            else {
+                data['preview_image'] = 'clear';
+                delete data['preview_image_metadata'];
             }
         }
         complete();

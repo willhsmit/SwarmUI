@@ -182,7 +182,7 @@ function editModel(model, browser) {
     let curImg = document.getElementById('current_image_img');
     if (curImg && curImg.tagName == 'IMG') {
         setImageFileDirect(modelsHelpers.imageElem, curImg.src, 'cur', 'cur', () => {
-            modelsHelpers.enableImageElem.checked = !model.preview_image || model.preview_image == 'imgs/model_placeholder.jpg';
+            modelsHelpers.enableImageElem.checked = false;
             run();
         });
     }
@@ -235,7 +235,7 @@ function edit_model_load_civitai() {
         }
         if (img) {
             setImageFileDirect(modelsHelpers.imageElem, img, 'cur', 'cur', () => {
-                modelsHelpers.enableImageElem.checked = true;
+                modelsHelpers.enableImageElem.checked = false;
                 triggerChangeFor(modelsHelpers.enableImageElem);
             });
         }
@@ -280,6 +280,10 @@ function save_edit_model() {
                 complete();
             }, true);
             return;
+        }
+        else {
+            data['preview_image'] = 'clear';
+            delete data['preview_image_metadata'];
         }
     }
     complete();
@@ -495,6 +499,9 @@ class ModelBrowserWrapper {
 
     formatTriggerPhrases(val) {
         let phrases = val.split(';').map(phrase => phrase.trim()).filter(phrase => phrase.length > 0);
+        if (phrases.length > 128) {
+            phrases = phrases.slice(0, 128);
+        }
         return phrases.map(phrase => this.createCopyableTriggerPhrase(phrase)).join('');
     }
 

@@ -46,7 +46,7 @@ class GenerateHandler {
     }
 
     beforeGenRun() {
-        num_current_gens += parseInt(getRequiredElementById('input_images').value);
+        num_waiting_gens += parseInt(getRequiredElementById('input_images').value);
     }
 
     doInterrupt(allSessions = false) {
@@ -84,7 +84,8 @@ class GenerateHandler {
         if (vid) {
             vid.remove();
         }
-        if (isVideoExt(src)) {
+        let isVideo = isVideoExt(src);
+        if (isVideo) {
             if (imgElem) {
                 imgElem.remove();
             }
@@ -95,7 +96,7 @@ class GenerateHandler {
             vid.width = 16 * 10;
             let sourceObj = document.createElement('source');
             sourceObj.src = src;
-            sourceObj.type = `video/${src.substring(src.lastIndexOf('.') + 1)}`;
+            sourceObj.type = isVideo;
             vid.appendChild(sourceObj);
             imgHolder.div.appendChild(vid);
         }

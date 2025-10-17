@@ -172,6 +172,9 @@ public class Settings : AutoConfiguration
         [ConfigComment("Preference for order of backend selection when loading a new model.\n'Last Used' will load the model on the last backend to load a model. This tends to distribute work between GPUs fairly.\n'First Free' will load the model on the first free backend. This tends to cause frequent model reloading on your first backend, and underuse of others.\nDefaults to Last Used.")]
         [ManualSettingsOptions(ManualNames = ["Last Used", "First Free"], Vals = ["last_used", "first_free"])]
         public string ModelLoadOrderPreference = "last_used";
+
+        [ConfigComment("If true, presume all backends can fast-load.\nFor example, if you have multiple local comfy instances, allow them all to boot up at the same time.")]
+        public bool AllBackendsLoadFast = false;
     }
 
     /// <summary>Settings related to networking and the webserver.</summary>
@@ -241,6 +244,8 @@ public class Settings : AutoConfiguration
         public int DownloadToRootID = 0;
 
         public string ActualModelRoot => Utilities.CombinePathWithAbsolute(Environment.CurrentDirectory, ModelRoot.Split(';')[0]);
+
+        public IEnumerable<string> ActualModelRoots => ModelRoot.Split(';').Select(r => Utilities.CombinePathWithAbsolute(Environment.CurrentDirectory, r));
 
         [ConfigComment("The model folder to use within 'ModelRoot'.\nDefaults to 'Stable-Diffusion'.\n'checkpoints' should be used for matching pre-existing ComfyUI model directories.\nAbsolute paths work too (usually do not use an absolute path, use just a folder name).\nUse a semicolon ';' to split multiple paths.")]
         public string SDModelFolder = "Stable-Diffusion";

@@ -84,7 +84,6 @@ body {
 }
 .top-status-bar-wrapper:hover {
     display: none;
-    opacity: 0.5;
 }
 .top-status-bar {
     position: absolute;
