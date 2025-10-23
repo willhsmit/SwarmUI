@@ -10,6 +10,7 @@ class GenerateHandler {
         this.imageContainerDivId = 'current_image';
         this.imageId = 'current_image_img';
         this.progressBarHtml = `<div class="image-preview-progress-inner"><div class="image-preview-progress-overall"></div><div class="image-preview-progress-current"></div></div>`;
+        this.batchDiv = document.getElementById('current_image_batch');
     }
 
     resetBatchIfNeeded() {
@@ -28,8 +29,21 @@ class GenerateHandler {
         return gotImageResult(image, metadata, batchId);
     }
 
+    gotTrackedImageResult(image, metadata, batchId, existingDiv = null) {
+        let curImgElem = document.getElementById(this.imageId);
+        if (!curImgElem || autoLoadImagesElem.checked || curImgElem.dataset.batch_id == batchId) {
+            this.setCurrentImage(image, metadata, batchId, false, true);
+            if (getUserSetting('AutoSwapImagesIncludesFullView') && imageFullView.isOpen()) {
+                imageFullView.showImage(image, metadata, batchId);
+            }
+        }
+    }
+
     gotImagePreview(image, metadata, batchId) {
         return gotImagePreview(image, metadata, batchId);
+    }
+
+    gotTrackedImagePreview(image, metadata, batchId) {
     }
 
     gotProgress(current, overall, batchId) {
@@ -106,19 +120,32 @@ class GenerateHandler {
         imgHolder.image = src;
         imgHolder.div.dataset.src = src;
     }
+
+    getDiv(imgHolder) {
+        if (imgHolder.div && imgHolder.div.parentElement) {
+            return imgHolder.div;
+        }
+        if (imgHolder.batchId) {
+            return this.batchDiv.querySelector(`[data-batch_id="${imgHolder.batchId}"]`);
+        }
+        return null;
+    }
     
-    internalHandleData(data, images, discardable, timeLastGenHit, actualInput, socketId, socket, isPreview) {
+    internalHandleData(data, images, discardable, timeLastGenHit, actualInput, socketId, socket, isPreview, batch_id) {
         if ('socket_intention' in data && data.socket_intention == 'close' && socket) {
             if (this.sockets[socketId] == socket) {
                 this.sockets[socketId] = null;
             }
-            if (Object.keys(discardable).length > 0) {
+            if (this.interrupted < batch_id || getUserSetting('ui.removeinterruptedgens', false)) {
                 // clear any lingering previews
                 for (let img of Object.values(images)) {
-                    img.div.remove();
+                    let div = this.getDiv(img);
+                    if (div) {
+                        div.remove();
+                    }
                 }
+                playCompletionAudio();
             }
-            playCompletionAudio();
             return;
         }
         if (isPreview) {
@@ -132,30 +159,25 @@ class GenerateHandler {
             let timeDiff = timeNow - timeLastGenHit[0];
             timeLastGenHit[0] = timeNow;
             this.appendGenTimeFrom(timeDiff / 1000);
-            if (!(data.batch_index in images)) {
+            let imgHolder = images[data.batch_index];
+            let div = imgHolder ? this.getDiv(imgHolder) : null;
+            if (!div) {
                 let batch_div = this.gotImageResult(data.image, data.metadata, `${data.request_id}_${data.batch_index}`);
                 if (batch_div) {
                     images[data.batch_index] = {div: batch_div, image: data.image, metadata: data.metadata, overall_percent: 0, current_percent: 0};
                 }
             }
             else {
-                let imgHolder = images[data.batch_index];
-                let curImgElem = document.getElementById(this.imageId);
-                if (!curImgElem || autoLoadImagesElem.checked || curImgElem.dataset.batch_id == `${data.request_id}_${data.batch_index}`) {
-                    this.setCurrentImage(data.image, data.metadata, `${data.request_id}_${data.batch_index}`, false, true);
-                    if (getUserSetting('AutoSwapImagesIncludesFullView') && imageFullView.isOpen()) {
-                        imageFullView.showImage(data.image, data.metadata, `${data.request_id}_${data.batch_index}`);
-                    }
-                }
-                let imgElem = imgHolder.div.querySelector('img');
+                this.gotTrackedImageResult(data.image, data.metadata, `${data.request_id}_${data.batch_index}`, div);
+                let imgElem = div.querySelector('img');
                 this.setImageFor(imgHolder, data.image);
-                let spinner = imgHolder.div.querySelector('.loading-spinner-parent');
+                let spinner = div.querySelector('.loading-spinner-parent');
                 if (spinner) {
                     spinner.remove();
                 }
                 delete imgElem.dataset.previewGrow;
-                imgHolder.div.dataset.metadata = data.metadata;
-                let progress_bars = imgHolder.div.querySelector('.image-preview-progress-wrapper');
+                div.dataset.metadata = data.metadata;
+                let progress_bars = div.querySelector('.image-preview-progress-wrapper');
                 if (progress_bars) {
                     progress_bars.remove();
                 }
@@ -172,8 +194,8 @@ class GenerateHandler {
         }
         if (data.gen_progress) {
             let thisBatchId = `${data.gen_progress.request_id}_${data.gen_progress.batch_index}`;
+            let metadataRaw = data.gen_progress.metadata ?? '{}';
             if (!(data.gen_progress.batch_index in images)) {
-                let metadataRaw = data.gen_progress.metadata ?? '{}';
                 let metadataParsed = JSON.parse(metadataRaw);
                 let batch_div = this.gotImagePreview(data.gen_progress.preview ?? `DOPLACEHOLDER:${metadataParsed.sui_image_params?.model || actualInput.model || ''}`, metadataRaw, thisBatchId);
                 if (batch_div) {
@@ -182,14 +204,18 @@ class GenerateHandler {
                     batch_div.prepend(progress_bars);
                 }
             }
+            else if (data.gen_progress.preview) {
+                this.gotTrackedImagePreview(data.gen_progress.preview, metadataRaw, thisBatchId);
+            }
             if (data.gen_progress.batch_index in images) {
                 let imgHolder = images[data.gen_progress.batch_index];
-                let overall = imgHolder.div.querySelector('.image-preview-progress-overall');
+                let div = this.getDiv(imgHolder);
+                let overall = div ? div.querySelector('.image-preview-progress-overall') : null;
                 if (overall && data.gen_progress.overall_percent) {
                     imgHolder.overall_percent = data.gen_progress.overall_percent;
                     imgHolder.current_percent = data.gen_progress.current_percent;
                     overall.style.width = `${imgHolder.overall_percent * 100}%`;
-                    imgHolder.div.querySelector('.image-preview-progress-current').style.width = `${imgHolder.current_percent * 100}%`;
+                    div.querySelector('.image-preview-progress-current').style.width = `${imgHolder.current_percent * 100}%`;
                     if (data.gen_progress.preview && autoLoadPreviewsElem.checked && imgHolder.image == null) {
                         this.setCurrentImage(data.gen_progress.preview, imgHolder.metadata, thisBatchId, true);
                     }
@@ -214,7 +240,10 @@ class GenerateHandler {
             for (let index of data.discard_indices) {
                 let img = discardable[index] ?? images[index];
                 if (img) {
-                    img.div.remove();
+                    let div = this.getDiv(img);
+                    if (div) {
+                        div.remove();
+                    }
                     let curImgElem = document.getElementById(this.imageId);
                     if (curImgElem && curImgElem.src == img.image) {
                         needsNew = true;
@@ -260,15 +289,18 @@ class GenerateHandler {
                 console.log(`Error in GenerateText2ImageWS:`, e, this.interrupted, batch_id);
                 setTimeout(() => {
                     for (let imgHolder of Object.values(images)) {
-                        let spinner = imgHolder.div.querySelector('.loading-spinner-parent');
-                        if (spinner) {
-                            spinner.remove();
-                            let failIcon = createDiv(null, 'image-block-failed');
-                            imgHolder.div.appendChild(failIcon);
-                        }
-                        let progress_bars = imgHolder.div.querySelector('.image-preview-progress-wrapper');
-                        if (progress_bars) {
-                            progress_bars.remove();
+                        let div = this.getDiv(imgHolder);
+                        if (div) {
+                            let spinner = div.querySelector('.loading-spinner-parent');
+                            if (spinner) {
+                                spinner.remove();
+                                let failIcon = createDiv(null, 'image-block-failed');
+                                div.appendChild(failIcon);
+                            }
+                            let progress_bars = div.querySelector('.image-preview-progress-wrapper');
+                            if (progress_bars) {
+                                progress_bars.remove();
+                            }
                         }
                     }
                 }, 1);
@@ -284,7 +316,7 @@ class GenerateHandler {
                 this.sockets[socketId].send(JSON.stringify(actualInput));
             }
             else {
-                socket = makeWSRequestT2I('GenerateText2ImageWS', actualInput, data => this.internalHandleData(data, images, discardable, timeLastGenHit, actualInput, socketId, socket, isPreview), handleError);
+                socket = makeWSRequestT2I('GenerateText2ImageWS', actualInput, data => this.internalHandleData(data, images, discardable, timeLastGenHit, actualInput, socketId, socket, isPreview, batch_id), handleError);
                 this.sockets[socketId] = socket;
             }
         };

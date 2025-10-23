@@ -2,6 +2,7 @@
 using FreneticUtilities.FreneticToolkit;
 using Newtonsoft.Json.Linq;
 using SwarmUI.Core;
+using SwarmUI.Media;
 using SwarmUI.Text2Image;
 using SwarmUI.Utils;
 using System.IO;
@@ -544,7 +545,7 @@ public class WorkflowGenerator
     }
 
     /// <summary>Creates a new node to load an image.</summary>
-    public string CreateLoadImageNode(Image img, string param, bool resize, string nodeId = null, int? width = null, int? height = null)
+    public string CreateLoadImageNode(ImageFile img, string param, bool resize, string nodeId = null, int? width = null, int? height = null)
     {
         if (nodeId is null && NodeHelpers.TryGetValue($"imgloader_{param}_{resize}", out string alreadyLoaded))
         {
@@ -553,7 +554,7 @@ public class WorkflowGenerator
         string result;
         if (Features.Contains("comfy_loadimage_b64") && !RestrictCustomNodes)
         {
-            if (img.Type == Image.ImageType.IMAGE)
+            if (img.Type.MetaType == MediaMetaType.Image)
             {
                 result = CreateNode("SwarmLoadImageB64", new JObject()
                 {
@@ -1272,10 +1273,16 @@ public class WorkflowGenerator
             string t5Patch = CreateNode("T5TokenizerOptions", new JObject() // TODO: This node is a temp patch
             {
                 ["clip"] = LoadingClip,
-                ["min_padding"] = 1,
+                ["min_padding"] = 0,
                 ["min_length"] = 0
             });
             LoadingClip = [t5Patch, 0];
+            string samplingNode = CreateNode("ModelSamplingAuraFlow", new JObject()
+            {
+                ["model"] = LoadingModel,
+                ["shift"] = UserInput.Get(T2IParamTypes.SigmaShift, 1)
+            });
+            LoadingModel = [samplingNode, 0];
             doVaeLoader(UserInput.SourceSession?.User?.Settings?.VAEs?.DefaultFluxVAE, "flux-1", "flux-ae");
         }
         else if (IsHiDream())
@@ -1516,7 +1523,7 @@ public class WorkflowGenerator
                 });
                 LoadingModel = [samplingNode, 0];
             }
-            else if (IsHunyuanVideo() || IsHunyuanImage() || IsWanVideo() || IsWanVideo22() || IsHiDream() || IsChroma())
+            else if (IsHunyuanVideo() || IsHunyuanImage() || IsWanVideo() || IsWanVideo22() || IsHiDream())
             {
                 string samplingNode = CreateNode("ModelSamplingSD3", new JObject()
                 {
@@ -1673,7 +1680,11 @@ public class WorkflowGenerator
         {
             defscheduler ??= "simple";
         }
-        bool willCascadeFix = false;
+        else if (IsChroma())
+        {
+            defscheduler ??= "beta";
+        }
+            bool willCascadeFix = false;
         JArray cascadeModel = null;
         if (!rawSampler && IsCascade() && FinalLoadedModel.Name.Contains("stage_c") && Program.MainSDModels.Models.TryGetValue(FinalLoadedModel.Name.Replace("stage_c", "stage_b"), out T2IModel bModel))
         {
@@ -2389,16 +2400,18 @@ public class WorkflowGenerator
         {
             string modelLoader = CreateNode("DownloadAndLoadGIMMVFIModel", new JObject()
             {
-                ["model"] = "gimmvfi_f_arb_lpips_fp32.safetensors"
+                ["model"] = "gimmvfi_f_arb_lpips_fp32.safetensors",
+                ["precision"] = "fp16",
+                ["torch_compile"] = false
             });
             string gimm = CreateNode("GIMMVFI_interpolate", new JObject()
             {
                 ["gimmvfi_model"] = new JArray() { modelLoader, 0 },
                 ["images"] = imageIn,
-                ["multiplier"] = mult,
-                ["ds_factor"] = 1,
+                ["ds_factor"] = 0.5, // TODO: They recommend this as a factor relative to size. 0.5 for 2k, 0.25 for 4k. This is a major performance alteration.
                 ["interpolation_factor"] = mult,
-                ["seed"] = 1
+                ["seed"] = 1,
+                ["output_flows"] = false
             });
             return [gimm, 0];
         }

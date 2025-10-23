@@ -1,6 +1,7 @@
 ﻿using FreneticUtilities.FreneticExtensions;
 using SwarmUI.Accounts;
 using SwarmUI.Core;
+using SwarmUI.Media;
 using SwarmUI.Utils;
 
 namespace SwarmUI.Text2Image;
@@ -147,13 +148,13 @@ public class T2IParamSet
             ValuesInput.Remove(param.ID);
             return;
         }
-        Image imageFor(string val)
+        ImageFile imageFor(string val)
         {
             if (val.StartsWithFast("data:"))
             {
-                return Image.FromDataString(val);
+                return ImageFile.FromDataString(val);
             }
-            return new Image(val, Image.ImageType.IMAGE, "png");
+            return ImageFile.FromBase64(val, MediaType.ImagePng);
         }
         object obj = param.Type switch
         {
@@ -162,7 +163,7 @@ public class T2IParamSet
             T2IParamDataType.BOOLEAN => bool.Parse(val),
             T2IParamDataType.TEXT or T2IParamDataType.DROPDOWN => val,
             T2IParamDataType.IMAGE => imageFor(val),
-            T2IParamDataType.IMAGE_LIST => val.Split('|').Select(v => imageFor(v)).ToList(),
+            T2IParamDataType.IMAGE_LIST => val.Split('|').Select(v => imageFor(v) as Image).ToList(),
             T2IParamDataType.MODEL => getModel(val),
             T2IParamDataType.LIST => val.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).ToList(),
             _ => throw new NotImplementedException()

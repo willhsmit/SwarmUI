@@ -946,7 +946,7 @@ function appendImage(container, imageSrc, batchId, textPreview, metadata = '', t
     if (typeof container == 'string') {
         container = getRequiredElementById(container);
     }
-    container.dataset.numImages = (container.dataset.numImages ?? 0) + 1;
+    container.dataset.numImages = parseInt(container.dataset.numImages ?? 0) + 1;
     let div = createDiv(null, `image-block image-block-${type} image-batch-${batchId == "folder" ? "folder" : (container.dataset.numImages % 2 ? "1" : "0")}`);
     div.dataset.batch_id = batchId;
     div.dataset.preview_text = textPreview;
@@ -981,9 +981,9 @@ function appendImage(container, imageSrc, batchId, textPreview, metadata = '', t
         img = document.createElement('img');
         srcTarget = img;
     }
-    img.addEventListener('load', () => {
+    img.addEventListener(isVideo ? 'loadeddata' : 'load', () => {
         if (batchId != "folder") {
-            let ratio = img.naturalWidth / img.naturalHeight;
+            let ratio = (img.naturalWidth || img.videoWidth) / (img.naturalHeight || img.videoHeight);
             div.style.width = `calc(${roundToStr(ratio * 10, 2)}rem + 2px)`;
         }
     });

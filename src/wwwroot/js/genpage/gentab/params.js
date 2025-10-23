@@ -103,7 +103,7 @@ function getHtmlForParam(param, prefix) {
                     let pElem = getRequiredElementById(`${prefix}${param.id}`);
                     textPromptAddKeydownHandler(pElem);
                     textPromptInputHandle(pElem);
-                } : (param.view_type == 'big' ? () => dynamicSizeTextBox(getRequiredElementById(`${prefix}${param.id}`, 32)): null);
+                } : (param.view_type == 'big' ? () => dynamicSizeTextBox(getRequiredElementById(`${prefix}${param.id}`), 32, 50): null);
                 return {html: makeTextInput(param.feature_flag, `${prefix}${param.id}`, param.id, param.name, param.description, param.default, param.view_type, param.description, param.toggleable, false, !param.no_popover) + pop, runnable: runnable};
             case 'decimal':
             case 'integer':
@@ -910,6 +910,9 @@ function getGenInput(input_overrides = {}, input_preoverrides = {}) {
                 delete input[type.id];
             }
         }
+    }
+    if (input['aspectratio'] == 'Custom') {
+        delete input['sidelength'];
     }
     if (!input['vae'] || input['vae'] == 'Automatic') {
         input['automaticvae'] = true;

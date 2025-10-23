@@ -168,7 +168,14 @@ class GenPageBrowserClass {
                 return;
             }
             tree = tree.children[part];
-            if (!tree.isOpen) {
+            if (tree.fileData) {
+                tree.clickme(() => {
+                    this.noContentUpdates = false;
+                    this.rerender();
+                });
+                return;
+            }
+            else if (!tree.isOpen) {
                 tree.clickme(() => {
                     this.clickPath(path);
                 });
@@ -449,7 +456,7 @@ class GenPageBrowserClass {
                 else {
                     div.style.width = `${factor + 1}rem`;
                     img.addEventListener('load', () => {
-                        let ratio = img.width / img.height;
+                        let ratio = img.naturalWidth / img.naturalHeight;
                         div.style.width = `${(ratio * factor) + 1}rem`;
                     });
                 }

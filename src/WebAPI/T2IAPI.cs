@@ -5,6 +5,7 @@ using SixLabors.ImageSharp;
 using SixLabors.ImageSharp.Processing;
 using SwarmUI.Accounts;
 using SwarmUI.Core;
+using SwarmUI.Media;
 using SwarmUI.Text2Image;
 using SwarmUI.Utils;
 using System.Data;
@@ -302,12 +303,12 @@ public static class T2IAPI
             string url, filePath;
             if (noSave)
             {
-                Image img = image.Img;
-                if (session.User.Settings.FileFormat.ReformatTransientImages && image.ActualImageTask is not null)
+                MediaFile file = image.File;
+                if (session.User.Settings.FileFormat.ReformatTransientImages && image.ActualFileTask is not null)
                 {
-                    img = image.ActualImageTask.Result;
+                    file = image.ActualFileTask.Result;
                 }
-                (url, filePath) = (session.GetImageB64(img), null);
+                (url, filePath) = (file.AsDataString(), null);
             }
             else
             {
@@ -334,7 +335,7 @@ public static class T2IAPI
             {
                 imageSet.Add(image);
             }
-            WebhookManager.SendEveryGenWebhook(thisParams, url, image.Img);
+            WebhookManager.SendEveryGenWebhook(thisParams, url, image.File);
             output(new JObject() { ["image"] = url, ["batch_index"] = $"{actualIndex}", ["request_id"] = $"{thisParams.UserRequestId}", ["metadata"] = string.IsNullOrWhiteSpace(metadata) ? null : metadata });
         }
         for (int i = 0; i < images && !claim.ShouldCancel; i++)
@@ -396,9 +397,9 @@ public static class T2IAPI
         }
         long finalTime = Environment.TickCount64;
         T2IEngine.ImageOutput[] griddables = [.. imageSet.Where(i => i.IsReal)];
-        if (griddables.Length <= session.User.Settings.MaxImagesInMiniGrid && griddables.Length > 1 && griddables.All(i => i.Img.Type == Image.ImageType.IMAGE))
+        if (griddables.Length <= session.User.Settings.MaxImagesInMiniGrid && griddables.Length > 1 && griddables.All(i => i.File.Type.MetaType == MediaMetaType.Image))
         {
-            ISImage[] imgs = [.. griddables.Select(i => i.Img.ToIS)];
+            ISImage[] imgs = [.. griddables.Select(i => (i.File as Image).ToIS)];
             int columns = (int)Math.Ceiling(Math.Sqrt(imgs.Length));
             int rows = columns;
             if (griddables.Length <= columns * (columns - 1))
@@ -423,8 +424,8 @@ public static class T2IAPI
             Image gridImg = new(grid);
             long genTime = Environment.TickCount64 - timeStart;
             user_input.ExtraMeta["generation_time"] = $"{genTime / 1000.0:0.00} total seconds (average {(finalTime - timeStart) / griddables.Length / 1000.0:0.00} seconds per image)";
-            (Task<Image> gridImageTask, string metadata) = user_input.SourceSession.ApplyMetadata(gridImg, user_input, imgs.Length);
-            T2IEngine.ImageOutput gridOutput = new() { Img = gridImg, ActualImageTask = gridImageTask, GenTimeMS = genTime };
+            (Task<MediaFile> gridFileTask, string metadata) = user_input.SourceSession.ApplyMetadata(gridImg, user_input, imgs.Length);
+            T2IEngine.ImageOutput gridOutput = new() { File = gridImg, ActualFileTask = gridFileTask, GenTimeMS = genTime };
             saveImage(gridOutput, -1, user_input, metadata);
         }
         T2IEngine.PostBatchEvent?.Invoke(new(user_input, [.. griddables]));
@@ -463,7 +464,7 @@ public static class T2IAPI
         [API.APIParameter("Data URL of the image to save.")] string image,
         [API.APIParameter("Raw mapping of input should contain general T2I parameters (see listing on Generate tab of main interface) to values, eg `{ \"prompt\": \"a photo of a cat\", \"model\": \"OfficialStableDiffusion/sd_xl_base_1.0\", \"steps\": 20, ... }`. Note that this is the root raw map, ie all params go on the same level as `images`, `session_id`, etc.")] JObject rawInput)
     {
-        Image img = Image.FromDataString(image);
+        ImageFile img = ImageFile.FromDataString(image);
         T2IParamInput user_input;
         rawInput.Remove("image");
         try
@@ -476,8 +477,8 @@ public static class T2IAPI
         }
         user_input.ApplySpecialLogic();
         Logs.Info($"User {session.User.UserID} stored an image to history.");
-        (Task<Image> imgTask, string metadata) = user_input.SourceSession.ApplyMetadata(img, user_input, 1);
-        T2IEngine.ImageOutput outputImage = new() { Img = img, ActualImageTask = imgTask };
+        (Task<MediaFile> imgTask, string metadata) = user_input.SourceSession.ApplyMetadata(img, user_input, 1);
+        T2IEngine.ImageOutput outputImage = new() { File = img as Image, ActualFileTask = imgTask };
         (string path, _) = session.SaveImage(outputImage, 0, user_input, metadata);
         return new() { ["images"] = new JArray() { new JObject() { ["image"] = path, ["batch_index"] = "0", ["request_id"] = $"{user_input.UserRequestId}", ["metadata"] = metadata } } };
     }
@@ -509,7 +510,7 @@ public static class T2IAPI
             {
                 tasks.TryAdd(dir, Utilities.RunCheckedTask(() =>
                 {
-                    if (dir.EndsWith("/"))
+                    if (dir.EndsWith('/'))
                     {
                         dir = dir[..^1];
                     }
@@ -647,6 +648,31 @@ public static class T2IAPI
 
     public record struct ImageHistoryHelper(string Name, ImageMetadataTracker.ImageMetadataEntry Metadata);
 
+    [API.APIDescription("Gets a list of images in a saved image history folder.",
+        """
+            "folders": ["Folder1", "Folder2"],
+            "files":
+            [
+                {
+                    "src": "path/to/image.jpg",
+                    "metadata": "some-metadata" // usually a JSON blob encoded as a string. Not guaranteed.
+                }
+            ]
+        """)]
+    public static async Task<JObject> ListImages(Session session,
+        [API.APIParameter("The folder path to start the listing in. Use an empty string for root.")] string path,
+        [API.APIParameter("Maximum depth (number of recursive folders) to search.")] int depth,
+        [API.APIParameter("What to sort the list by - `Name` or `Date`.")] string sortBy = "Name",
+        [API.APIParameter("If true, the sorting should be done in reverse.")] bool sortReverse = false)
+    {
+        if (!Enum.TryParse(sortBy, true, out ImageHistorySortMode sortMode))
+        {
+            return new JObject() { ["error"] = $"Invalid sort mode '{sortBy}'." };
+        }
+        string root = Utilities.CombinePathWithAbsolute(Environment.CurrentDirectory, session.User.OutputDirectory);
+        return GetListAPIInternal(session, path, root, ImageExtensions, f => true, depth, sortMode, sortReverse);
+    }
+
     [API.APIDescription("Open an image folder in the file explorer. Used for local users directly.", "\"success\": true")]
     public static async Task<JObject> OpenImageFolder(Session session,
         [API.APIParameter("The path to the image to show in the image folder.")] string path)
@@ -722,38 +748,15 @@ public static class T2IAPI
         return new JObject() { ["success"] = true };
     }
 
-    [API.APIDescription("Gets a list of images in a saved image history folder.",
-        """
-            "folders": ["Folder1", "Folder2"],
-            "files":
-            [
-                {
-                    "src": "path/to/image.jpg",
-                    "metadata": "some-metadata" // usually a JSON blob encoded as a string. Not guaranteed.
-                }
-            ]
-        """)]
-    public static async Task<JObject> ListImages(Session session,
-        [API.APIParameter("The folder path to start the listing in. Use an empty string for root.")] string path,
-        [API.APIParameter("Maximum depth (number of recursive folders) to search.")] int depth,
-        [API.APIParameter("What to sort the list by - `Name` or `Date`.")] string sortBy = "Name",
-        [API.APIParameter("If true, the sorting should be done in reverse.")] bool sortReverse = false)
-    {
-        if (!Enum.TryParse(sortBy, true, out ImageHistorySortMode sortMode))
-        {
-            return new JObject() { ["error"] = $"Invalid sort mode '{sortBy}'." };
-        }
-        string root = Utilities.CombinePathWithAbsolute(Environment.CurrentDirectory, session.User.OutputDirectory);
-        return GetListAPIInternal(session, path, root, ImageExtensions, f => true, depth, sortMode, sortReverse);
-    }
-
     [API.APIDescription("Toggle whether an image is starred or not.", "\"new_state\": true")]
     public static async Task<JObject> ToggleImageStarred(Session session,
         [API.APIParameter("The path to the image to star.")] string path)
     {
+        bool wasStar = false;
         path = path.Replace('\\', '/').Trim('/');
         if (path.StartsWith("Starred/"))
         {
+            wasStar = true;
             path = path["Starred/".Length..];
         }
         string origPath = path;
@@ -765,17 +768,35 @@ public static class T2IAPI
             return new JObject() { ["error"] = userError };
         }
         path = UserImageHistoryHelper.GetRealPathFor(session.User, path, root: root);
-        if (!File.Exists(path))
-        {
-            Logs.Warning($"User {session.User.UserID} tried to star image path '{origPath}' which maps to '{path}', but cannot as the image does not exist.");
-            return new JObject() { ["error"] = "That file does not exist, cannot star." };
-        }
         string pathBeforeDot = path.BeforeLast('.');
         string starPath = $"Starred/{(session.User.Settings.StarNoFolders ? origPath.Replace("/", "") : origPath)}";
         (starPath, _, _) = WebServer.CheckFilePath(root, starPath);
+        starPath = UserImageHistoryHelper.GetRealPathFor(session.User, starPath, root: root);
         string starBeforeDot = starPath.BeforeLast('.');
+        if (!File.Exists(path))
+        {
+            if (wasStar && File.Exists(starPath))
+            {
+                Logs.Debug($"User {session.User.UserID} un-starred '{path}' without a raw, moving back to raw");
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.Move(starPath, path);
+                foreach (string ext in DeletableFileExtensions)
+                {
+                    if (File.Exists($"{starBeforeDot}{ext}"))
+                    {
+                        File.Move($"{starBeforeDot}{ext}", $"{pathBeforeDot}{ext}");
+                    }
+                }
+                ImageMetadataTracker.RemoveMetadataFor(path);
+                ImageMetadataTracker.RemoveMetadataFor(starPath);
+                return new JObject() { ["new_state"] = false };
+            }
+            Logs.Warning($"User {session.User.UserID} tried to star image path '{origPath}' which maps to '{path}', but cannot as the image does not exist.");
+            return new JObject() { ["error"] = "That file does not exist, cannot star." };
+        }
         if (File.Exists(starPath))
         {
+            Logs.Debug($"User {session.User.UserID} un-starred '{path}'");
             File.Delete(starPath);
             foreach (string ext in DeletableFileExtensions)
             {
@@ -790,6 +811,7 @@ public static class T2IAPI
         }
         else
         {
+            Logs.Debug($"User {session.User.UserID} starred '{path}'");
             Directory.CreateDirectory(Path.GetDirectoryName(starPath));
             File.Copy(path, starPath);
             foreach (string ext in DeletableFileExtensions)
