@@ -1087,6 +1087,7 @@ public class T2IParamTypes
         }
         if (value == type.IgnoreIf)
         {
+            data.Remove(type, sectionId);
             return;
         }
         if (type.Permission is not null)
