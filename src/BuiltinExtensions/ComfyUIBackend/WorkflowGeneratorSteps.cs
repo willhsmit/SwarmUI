@@ -1824,6 +1824,7 @@ public class WorkflowGeneratorSteps
                     });
                     JArray partialBatch = [partialBatchNode, 0];
                     g.FinalImageOut = partialBatch;
+                    Image extendEndFrame = i < T2IParamTypes.VideoExtendEndFrame.Length ? g.UserInput.Get(T2IParamTypes.VideoExtendEndFrame[i], null) : null;
                     WorkflowGenerator.ImageToVideoGenInfo genInfo = new()
                     {
                         Generator = g,
@@ -1841,7 +1842,8 @@ public class WorkflowGeneratorSteps
                         Seed = seed,
                         BatchIndex = 0,
                         BatchLen = frameExtendOverlap,
-                        ContextID = part.ContextID
+                        ContextID = part.ContextID,
+                        VideoEndFrame = extendEndFrame
                     };
                     g.CreateImageToVideo(genInfo);
                     videoFps = genInfo.VideoFPS;

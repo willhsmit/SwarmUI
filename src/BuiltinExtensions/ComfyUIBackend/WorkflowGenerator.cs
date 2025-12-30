@@ -1628,7 +1628,7 @@ public partial class WorkflowGenerator
                 }
                 if (VideoEndFrame is not null)
                 {
-                    string endFrame = g.CreateLoadImageNode(VideoEndFrame, "${videoendframe}", false);
+                    string endFrame = g.CreateLoadImageNode(VideoEndFrame, "${videoendframe." + ContextID + "}", false);
                     JArray endFrameNode = [endFrame, 0];
                     string scaled = g.CreateNode("ImageScale", new JObject()
                     {
@@ -1719,7 +1719,7 @@ public partial class WorkflowGenerator
                 });
                 if (VideoEndFrame is not null)
                 {
-                    string endFrame = g.CreateLoadImageNode(VideoEndFrame, "${videoendframe}", false);
+                    string endFrame = g.CreateLoadImageNode(VideoEndFrame, "${videoendframe." + ContextID + "}", false);
                     JArray endFrameNode = [endFrame, 0];
                     string scaled = g.CreateNode("ImageScale", new JObject()
                     {

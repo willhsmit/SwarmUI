@@ -319,6 +319,8 @@ public class T2IParamTypes
     public static T2IRegisteredParam<double> CFGScale, VariationSeedStrength, InitImageCreativity, InitImageResetToNorm, InitImageNoise, RefinerControl, RefinerUpscale, RefinerCFGScale, ReVisionStrength, AltResolutionHeightMult,
         FreeUBlock1, FreeUBlock2, FreeUSkip1, FreeUSkip2, GlobalRegionFactor, EndStepsEarly, SamplerSigmaMin, SamplerSigmaMax, SamplerRho, VideoAugmentationLevel, VideoCFG, VideoMinCFG, Video2VideoCreativity, VideoSwapPercent, VideoExtendSwapPercent, IP2PCFG2, RegionalObjectCleanupFactor, SigmaShift, SegmentThresholdMax, SegmentCFGScale, FluxGuidanceScale;
     public static T2IRegisteredParam<Image> InitImage, MaskImage, VideoEndFrame;
+    // assume 4 video extends is enough for anybody, for now
+    public static T2IRegisteredParam<Image>[] VideoExtendEndFrame = new T2IRegisteredParam<Image>[4];
     public static T2IRegisteredParam<T2IModel> Model, RefinerModel, VAE, RegionalObjectInpaintingModel, SegmentModel, VideoModel, VideoSwapModel, RefinerVAE, ClipLModel, ClipGModel, ClipVisionModel, T5XXLModel, LLaVAModel, LLaMAModel, QwenModel, MistralModel, VideoExtendModel, VideoExtendSwapModel;
     public static T2IRegisteredParam<List<string>> Loras, LoraWeights, LoraTencWeights, LoraSectionConfinement;
     public static T2IRegisteredParam<List<Image>> PromptImages;
@@ -593,6 +595,13 @@ public class T2IParamTypes
         VideoEndFrame = Register<Image>(new("Video End Image", "An image to use as the 'end frame' of a video.\nOnly some models support end frames (Wan FLF2V, LTX-V), most don't.",
             null, OrderPriority: 30, Group: GroupVideo, Permission: Permissions.ParamVideo, FeatureFlag: "video", DoNotPreview: true, ChangeWeight: 2, IsAdvanced: true
             ));
+        for (int i = 0; i < VideoExtendEndFrame.Length; i++)
+        {
+            string suffix = i switch { 0 => "", 1 => " Two", 2 => " Three", 3 => " Four", _ => "Error" };
+            VideoExtendEndFrame[i] = Register<Image>(new($"Video Extend End Image{suffix}", "An image to use as the 'end frame' of the next video extend.", 
+                null, OrderPriority: 40 + i, Group: GroupVideo, Permission: Permissions.ParamVideo, FeatureFlag: "video", DoNotPreview: true, ChangeWeight: 2, IsAdvanced: true
+            ));
+        }
         // ================================================ Advanced Video ================================================
         GroupAdvancedVideo = new("Advanced Video", Open: false, OrderPriority: 6, Description: "Advanced/special Video model features that only apply to some video models.");
         VideoFPS = Register<int>(new("Video FPS", "The FPS (frames per second) to use for video generation.\nThis configures the target FPS the video will try to generate for, or will output as.\nMost models are locked to a specific framerate, so altering this is a bad idea.\nSVD prefers 6, LTXV prefers 24.",
@@ -1078,7 +1087,6 @@ public class T2IParamTypes
         }
         if (value == type.IgnoreIf)
         {
-            data.Remove(type, sectionId);
             return;
         }
         if (type.Permission is not null)
